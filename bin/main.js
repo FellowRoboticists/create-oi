@@ -9,6 +9,7 @@ var create = (function() {
     var mode = "SAFE";
     var serial;
     var watchdog = false;
+    const parser = require('./packet-parser');
 
     var cmds = {
         START:  0x80,
@@ -41,7 +42,7 @@ var create = (function() {
 
     var distance = 0;
     var angle = 0;
-    var pkt = []; // stores working packet data
+    // var pkt = []; // stores working packet data
 
     function seek(buffer) {
         for (var i = 0; i < buffer.length; i++) {
@@ -52,8 +53,8 @@ var create = (function() {
     }
 
     var ldata = 0;
-    var LEN_IDX = 1;
-    var START_BYTE = 0x13;
+    //var LEN_IDX = 1;
+    //var START_BYTE = 0x13;
 
     function bumperIdxToName(idx) {
         switch(idx) {
@@ -64,44 +65,8 @@ var create = (function() {
     }
 
     function parse(buffer) {
-        // index to start reading packet 
-        // data, default to invalid value
-        var start = -1;  
-
-        if (pkt.length === 0) 
-            start = seek(buffer);
-        else 
-            start = 0; // we already have the header stored in pkt, read full buff
-
-        if (start === -1) // couldn't seek to START_BYTE
-            return;    
-
-        for (var i = start; i < buffer.length; i++) 
-            pkt.push(buffer[i]);
-
-        if (buffer.length < start + 2) // LEN_IDX can't be read yet
-            return; 
-
-        // START_BYTE found, but not actually start of pkt
-        if (buffer[start+1] === 0) { 
-            pkt = [];
-            return;
-        }
-
-        // +3 due to START byte, COUNT byte & CHKSUM bytes included with all pkts
-        if (pkt.length < (pkt[LEN_IDX] + 3))
-            return;
-        
-        // extract one whole packet from pkt buffer
-        var currPkt = pkt.splice(0,pkt[LEN_IDX]+3);
-
-        var chksum = 0;
-        for (var i = 0; i < currPkt.length; i++) 
-            chksum += currPkt[i];
-
-        chksum = chksum & 0xff;
-
-        if (chksum == 0) {
+      var currPkt = parser.parse(buffer)
+      if (currPkt) {
             var idx = 2;
             var sensorMsgsParsed = 0;
             while (idx < currPkt.length - 1) {
@@ -149,10 +114,10 @@ var create = (function() {
                         idx++; // prevents inf loop
                 }
             }
+            parser.reset();
         } else {
             ;//console.log("WARN: incomming packet failed checksum");
         }
-        pkt = []; // clear pkt buff contents
     }
 
     function sendCommand(cmd, payload) {
@@ -185,6 +150,7 @@ var create = (function() {
         })
         .then(module.wait)
         .then(function() {
+            // sendCommand(cmds.STREAM, [1, 7]);
             sendCommand(cmds.STREAM, [3, 7, 19, 20]);
             return 100;
         })

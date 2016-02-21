@@ -21,5 +21,8 @@
   },
   "author": "Jeff Rousseau <jroussea@cs.uml.edu>",
   "license": "GPL",
-  "readmeFilename": "README.md"
+  "readmeFilename": "README.md",
+  "devDependencies": {
+    "blue-tape": "^0.2.0"
+  }
 }
