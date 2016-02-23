@@ -27,7 +27,8 @@ var create = (function() {
         BUTTONS:    18,
         DISTANCE:   19,
         ANGLE:      20,
-        VOLTAGE:    22
+        VOLTAGE:    22,
+        ANALOG_PIN: 33
     };
 
     // helpers
@@ -53,8 +54,24 @@ var create = (function() {
     }
 
     var ldata = 0;
+    var inProximityAlert = false;
     //var LEN_IDX = 1;
     //var START_BYTE = 0x13;
+    //
+
+    function proximity(rawValue) {
+      var distance = -1;
+      if (rawValue > 0) {
+        distance = 4192.936 * Math.pow(rawValue, -0.935) - 3.937;
+      }
+      return distance;
+      // This is the Java code we used in the Android
+      //double distance = -1;
+      //if (rawValue > 0) {
+        //distance = 4192.936 * Math.pow(rawValue, -0.935) - 3.937;
+      //}
+      //return distance;
+    }
 
     function bumperIdxToName(idx) {
         switch(idx) {
@@ -109,8 +126,25 @@ var create = (function() {
                         idx += 3;
                         sensorMsgsParsed++;
                     break;
+                    case sensors.ANALOG_PIN:
+                      var val = (currPkt[idx+1] << 8) | currPkt[idx+2];
+                      if (val > 32767) {
+                          val -= 65536;
+                      }
+                      var proximityInInches = proximity(val);
+                      // console.log("Value: %d -> %d", val, proximityInInches);
+                      if (proximityInInches > 0.0 && (proximityInInches > 12.4 && proximityInInches < 16.2)) {
+                        if (! inProximityAlert) {
+                          eventer.emit('proximity', proximityInInches);
+                          inProximityAlert = true;
+                        }
+                      } else {
+                        inProximityAlert = false;
+                      }
+                      idx += 3;
+                      break;
                     default:
-                        console.log("WARN: couldn't parse incomming OI pkt");
+                        console.log("WARN: couldn't parse incomming OI pkt: %s", currPkt.toString('hex'));
                         idx++; // prevents inf loop
                 }
             }
@@ -119,6 +153,14 @@ var create = (function() {
             ;//console.log("WARN: incomming packet failed checksum");
         }
     }
+
+       //int bumpValue = packet.getSensorValue(BUMP_PKT);
+        //double proximityInInches = proximity(packet.getSensorValue(ANALOG_PIN_PKT));
+        //if (bumpValue > 0 && bumpValue < 4) {
+            //mStateManager.processCommand("bump");
+        //} else if (proximityInInches > 0.0 && (proximityInInches > 12.4 && proximityInInches < 16.1)) {
+            //mStateManager.processCommand("proximity");
+        //}
 
     function sendCommand(cmd, payload) {
         if (typeof payload === "undefined") {
@@ -150,8 +192,8 @@ var create = (function() {
         })
         .then(module.wait)
         .then(function() {
-            // sendCommand(cmds.STREAM, [1, 7]);
-            sendCommand(cmds.STREAM, [3, 7, 19, 20]);
+            sendCommand(cmds.STREAM, [2, 7, 33 ]);
+            // sendCommand(cmds.STREAM, [3, 7, 19, 20]);
             return 100;
         })
         .then(module.wait)
@@ -256,7 +298,7 @@ var create = (function() {
         return mode;
     };
 
-    listeners = { 'bump': [], 'bumpend': [] };
+    listeners = { 'bump': [], 'bumpend': [], 'proximity': [] };
 
     module.on = function(evt, cb) {
         eventer.on(evt, function(e) { 
